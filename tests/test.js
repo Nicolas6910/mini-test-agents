@@ -112,7 +112,7 @@ describe('Multi-Agent API Tests', () => {
     test('POST /api/v1/users should reject duplicate email', async () => {
       const duplicateUser = {
         name: 'Duplicate User',
-        email: 'admin@example.com' // Email déjà existant
+        email: 'admin@example.com' // Email dï¿½jï¿½ existant
       };
 
       const response = await request(app)
@@ -150,7 +150,7 @@ describe('Multi-Agent API Tests', () => {
     });
 
     test('DELETE /api/v1/users/:id should delete user', async () => {
-      // D'abord créer un utilisateur à supprimer
+      // D'abord crï¿½er un utilisateur ï¿½ supprimer
       const createResponse = await request(app)
         .post('/api/v1/users')
         .send({
@@ -167,7 +167,7 @@ describe('Multi-Agent API Tests', () => {
       expect(deleteResponse.body.success).toBe(true);
       expect(deleteResponse.body.message).toBe('User deleted successfully');
 
-      // Vérifier que l'utilisateur n'existe plus
+      // Vï¿½rifier que l'utilisateur n'existe plus
       await request(app)
         .get(`/api/v1/users/${userId}`)
         .expect(404);
@@ -187,7 +187,7 @@ describe('Multi-Agent API Tests', () => {
 
 });
 
-// Tests d'intégration spécifiques pour le système multi-agents
+// Tests d'intï¿½gration spï¿½cifiques pour le systï¿½me multi-agents
 describe('Multi-Agent Integration Tests', () => {
   
   test('API should be ready for frontend integration', async () => {
@@ -207,10 +207,11 @@ describe('Multi-Agent Integration Tests', () => {
 
   test('CORS headers should be present for frontend', async () => {
     const response = await request(app)
-      .options('/api/v1/users')
-      .expect(204);
+      .get('/api/v1/users')
+      .set('Origin', 'http://localhost:3000');
     
     expect(response.headers).toHaveProperty('access-control-allow-origin');
+    expect(response.headers).toHaveProperty('access-control-allow-credentials');
   });
 
   test('Rate limiting should be in place', async () => {

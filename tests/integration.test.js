@@ -14,15 +14,15 @@ describe('Integration Tests - Server Startup', () => {
   });
 
   test('Server should start successfully', async () => {
-    // Test que le serveur peut démarrer sans erreurs
+    // Test que le serveur peut dï¿½marrer sans erreurs
     expect(() => {
       server = startServer();
     }).not.toThrow();
 
-    // Attendre un peu pour que le serveur démarre
+    // Attendre un peu pour que le serveur dï¿½marre
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Vérifier que le serveur répond
+    // Vï¿½rifier que le serveur rï¿½pond
     const response = await request(server)
       .get('/health')
       .expect(200);
@@ -70,12 +70,12 @@ describe('Multi-Agent System Readiness Tests', () => {
       .get('/api/v1/users')
       .expect(200);
     
-    // Vérifier le format de réponse standardisé
+    // Vï¿½rifier le format de rï¿½ponse standardisï¿½
     expect(response.body).toHaveProperty('success', true);
     expect(response.body).toHaveProperty('data');
     expect(response.body.data).toBeInstanceOf(Array);
     
-    // Vérifier la structure des objets utilisateur
+    // Vï¿½rifier la structure des objets utilisateur
     if (response.body.data.length > 0) {
       const user = response.body.data[0];
       expect(user).toHaveProperty('id');
@@ -103,12 +103,17 @@ describe('Multi-Agent System Readiness Tests', () => {
     const response = await request(app)
       .get('/health');
     
-    // Vérifier les headers de sécurité (helmet)
+    // Vï¿½rifier les headers de sï¿½curitï¿½ (helmet)
     expect(response.headers).toHaveProperty('x-content-type-options');
     expect(response.headers).toHaveProperty('x-frame-options');
     
-    // Vérifier CORS
-    expect(response.headers).toHaveProperty('access-control-allow-origin');
+    // Vï¿½rifier CORS
+    // VÃ©rifier CORS - header disponible avec une origine spÃ©cifique
+    const corsResponse = await request(app)
+      .get('/health')
+      .set('Origin', 'http://localhost:3000');
+    
+    expect(corsResponse.headers).toHaveProperty('access-control-allow-origin');
   });
 
 });
