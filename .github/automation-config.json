@@ -1,0 +1,93 @@
+{
+  "multi_agent_config": {
+    "project_board_id": "4",
+    "project_name": "Multi-Agent Test Project - Phase 1",
+    "repository": "Nicolas6910/mini-test-agents",
+    "coordination_mode": "hybrid"
+  },
+  "agent_profiles": {
+    "backend-expert": {
+      "domain": "backend",
+      "specialties": ["api", "database", "server", "backend"],
+      "deliverable_pattern": "deliverables/backend-*.md",
+      "review_expertise": ["api-design", "database-schema", "server-architecture"],
+      "dependencies": [],
+      "dependents": ["frontend-expert"]
+    },
+    "frontend-expert": {
+      "domain": "frontend", 
+      "specialties": ["ui", "ux", "client", "frontend", "interface"],
+      "deliverable_pattern": "deliverables/frontend-*.md",
+      "review_expertise": ["ui-design", "user-experience", "client-architecture"],
+      "dependencies": ["backend-expert"],
+      "dependents": ["marketing-expert"]
+    },
+    "marketing-expert": {
+      "domain": "marketing",
+      "specialties": ["marketing", "campaign", "brand", "communication"],
+      "deliverable_pattern": "deliverables/marketing-*.md", 
+      "review_expertise": ["marketing-strategy", "brand-messaging", "user-communication"],
+      "dependencies": ["frontend-expert"],
+      "dependents": ["automation-expert"]
+    },
+    "automation-expert": {
+      "domain": "automation",
+      "specialties": ["ci", "cd", "deploy", "automation", "pipeline"],
+      "deliverable_pattern": "deliverables/automation-*.md",
+      "review_expertise": ["ci-cd", "deployment", "automation"],
+      "dependencies": ["marketing-expert"],
+      "dependents": []
+    }
+  },
+  "workflow_rules": {
+    "sequential_dependencies": {
+      "enabled": true,
+      "chain": ["backend", "frontend", "marketing", "automation"],
+      "block_parallel_on_dependencies": false,
+      "notification_delay_minutes": 0
+    },
+    "parallel_coordination": {
+      "enabled": true,
+      "conflict_detection": true,
+      "auto_resolve_conflicts": false,
+      "file_conflict_patterns": ["*.md", "*.json", "*.yml"]
+    },
+    "quality_gates": {
+      "minimum_content_lines": 100,
+      "require_headers": true,
+      "require_domain_keywords": true,
+      "professional_language_check": true
+    }
+  },
+  "notification_templates": {
+    "dependency_ready": {
+      "title": "🚀 Ready for {next_domain}: {completed_domain} deliverable completed",
+      "labels": ["coordination", "dependency", "{next_domain}", "high-priority"],
+      "assignee_pattern": "{next_domain}-expert"
+    },
+    "conflict_detected": {
+      "title": "⚠️ Coordination Alert: Potential conflict with PR #{pr_number}",
+      "labels": ["coordination", "conflict", "needs-resolution"],
+      "assignee_pattern": "project-coordinator"
+    },
+    "quality_issue": {
+      "title": "📋 Quality Check: {deliverable_name} needs attention",
+      "labels": ["quality", "needs-revision", "{domain}"],
+      "assignee_pattern": "{domain}-expert"
+    }
+  },
+  "project_board_columns": {
+    "todo": "Todo",
+    "in_progress": "In Progress", 
+    "review": "In Review",
+    "done": "Done"
+  },
+  "automation_features": {
+    "auto_reviewer_assignment": true,
+    "dependency_notifications": true,
+    "progress_tracking": true,
+    "conflict_detection": true,
+    "quality_validation": true,
+    "project_board_sync": true
+  }
+}

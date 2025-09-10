@@ -1,0 +1,212 @@
+name: Project Board Synchronization
+
+on:
+  issues:
+    types: [opened, edited, closed, assigned, labeled]
+  pull_request:
+    types: [opened, closed, merged, ready_for_review]
+  project_card:
+    types: [moved]
+
+jobs:
+  sync-issues-to-board:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    steps:
+      - name: Add new issues to project board
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // This would add issues to the project board
+            // For now, we'll log the action
+            console.log(`Issue #${context.issue.number} ${context.payload.action}`);
+            
+            const issueNumber = context.issue.number;
+            const action = context.payload.action;
+            
+            // Map issue labels to project board columns
+            const issue = context.payload.issue;
+            const labels = issue.labels.map(label => label.name);
+            
+            let targetColumn = 'Todo';
+            if (issue.assignee) {
+              targetColumn = 'In Progress';
+            }
+            if (issue.state === 'closed') {
+              targetColumn = 'Done';
+            }
+            
+            console.log(`Issue #${issueNumber} should be in column: ${targetColumn}`);
+            console.log(`Labels: ${labels.join(', ')}`);
+
+  sync-prs-to-board:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Update PR status on project board
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const action = context.payload.action;
+            
+            console.log(`PR #${pr.number} ${action}`);
+            
+            // Determine target column based on PR state
+            let targetColumn = '';
+            switch(action) {
+              case 'opened':
+                targetColumn = 'In Review';
+                break;
+              case 'ready_for_review':
+                targetColumn = 'In Review';
+                break;
+              case 'closed':
+                targetColumn = pr.merged ? 'Done' : 'Todo';
+                break;
+            }
+            
+            if (targetColumn) {
+              console.log(`PR #${pr.number} should move to: ${targetColumn}`);
+              
+              // Find linked issue and update its status too
+              const body = pr.body || '';
+              const issueMatch = body.match(/(?:closes|fixes|resolves)\s+#(\d+)/i);
+              if (issueMatch) {
+                const linkedIssue = issueMatch[1];
+                console.log(`PR #${pr.number} is linked to issue #${linkedIssue}`);
+                
+                if (pr.merged) {
+                  // Close the linked issue when PR is merged
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: parseInt(linkedIssue),
+                    state: 'closed'
+                  });
+                  
+                  console.log(`Closed linked issue #${linkedIssue}`);
+                }
+              }
+            }
+
+  agent-coordination:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    steps:
+      - name: Trigger dependent agent notifications
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = pr.labels.map(label => label.name);
+            
+            // Define agent coordination matrix
+            const dependencies = {
+              'backend': ['frontend-expert'],
+              'frontend': ['marketing-expert'],
+              'marketing': ['automation-manager']
+            };
+            
+            // Find which domain was completed
+            const completedDomain = labels.find(label => 
+              ['backend', 'frontend', 'marketing', 'automation'].includes(label)
+            );
+            
+            if (completedDomain && dependencies[completedDomain]) {
+              const dependentAgents = dependencies[completedDomain];
+              
+              for (const agent of dependentAgents) {
+                // Create notification comment
+                const notificationBody = `🤖 **Agent Coordination Notification**
+
+**From**: ${completedDomain}-expert  
+**To**: ${agent}  
+**Event**: Deliverable completed and merged
+
+**Message**: The ${completedDomain} deliverable has been successfully completed and merged. You can now proceed with any dependent tasks that require this component.
+
+**Related PR**: #${pr.number}
+**Next Actions**: Check for any updated requirements or dependencies in the merged deliverable.
+
+---
+*Automated notification from Multi-Agent Coordination System*`;
+
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `🔔 Coordination: ${completedDomain} deliverable ready for ${agent}`,
+                  body: notificationBody,
+                  assignees: [agent],
+                  labels: ['coordination', 'notification', agent.split('-')[0]]
+                });
+                
+                console.log(`Created coordination notification for ${agent}`);
+              }
+            }
+
+  update-progress-metrics:
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Calculate and update project progress
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Get all issues and PRs to calculate progress
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              labels: 'agent-task'
+            });
+            
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all'
+            });
+            
+            // Calculate metrics
+            const totalTasks = issues.filter(issue => !issue.pull_request).length;
+            const completedTasks = issues.filter(issue => 
+              !issue.pull_request && issue.state === 'closed'
+            ).length;
+            
+            const totalPRs = prs.length;
+            const mergedPRs = prs.filter(pr => pr.merged_at).length;
+            
+            const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+            const prProgress = totalPRs > 0 ? Math.round((mergedPRs / totalPRs) * 100) : 0;
+            const overallProgress = Math.round((taskProgress + prProgress) / 2);
+            
+            // Create or update progress tracking issue
+            const progressReport = `# 📊 Multi-Agent Project Progress
+
+## Overall Status: ${overallProgress}% Complete
+
+### Task Completion
+- **Completed**: ${completedTasks}/${totalTasks} agent tasks
+- **Progress**: ${taskProgress}%
+
+### Deliverable Status  
+- **Merged**: ${mergedPRs}/${totalPRs} pull requests
+- **Progress**: ${prProgress}%
+
+### Agent Activity
+${issues.map(issue => {
+  const agent = issue.assignee ? issue.assignee.login : 'Unassigned';
+  const status = issue.state === 'closed' ? '✅' : '🔄';
+  return `- ${status} **${agent}**: ${issue.title}`;
+}).join('\n')}
+
+---
+*Last updated: ${new Date().toISOString()}*
+*Automated by Multi-Agent Project System*`;
+
+            console.log('Progress Report:');
+            console.log(progressReport);
+            
+            // Post progress update as comment on main tracking issue
+            // (Would need to identify the main tracking issue)
+            console.log(`Overall project progress: ${overallProgress}%`);

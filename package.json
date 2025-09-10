@@ -1,0 +1,29 @@
+{
+  "name": "mini-test-agents",
+  "version": "1.0.0",
+  "description": "Multi-Agent System Test Project - Phase 1",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test-automation": "node .github/scripts/test-automation.js",
+    "validate": "node .github/scripts/test-automation.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nicolas6910/mini-test-agents.git"
+  },
+  "keywords": [
+    "multi-agent",
+    "automation",
+    "github",
+    "coordination"
+  ],
+  "author": "Multi-Agent System",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Nicolas6910/mini-test-agents/issues"
+  },
+  "homepage": "https://github.com/Nicolas6910/mini-test-agents#readme",
+  "devDependencies": {},
+  "dependencies": {}
+}

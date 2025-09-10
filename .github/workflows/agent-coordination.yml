@@ -1,0 +1,340 @@
+name: Multi-Agent Coordination & Notifications
+
+on:
+  pull_request:
+    types: [opened, closed, ready_for_review]
+  issues:
+    types: [closed, assigned]
+  workflow_dispatch:
+    inputs:
+      coordination_type:
+        description: 'Type of coordination event'
+        required: true
+        default: 'manual'
+        type: choice
+        options:
+        - manual
+        - dependency_check
+        - progress_update
+
+jobs:
+  agent-assignment-logic:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - name: Smart reviewer assignment based on content and domain
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // Analyze changed files to determine domain
+            let domain = 'general';
+            let reviewers = ['Nicolas6910']; // Always include owner
+            
+            for (const file of files) {
+              const filename = file.filename.toLowerCase();
+              
+              if (filename.includes('backend') || filename.includes('api') || filename.includes('server')) {
+                domain = 'backend';
+                reviewers.push('backend-expert');
+              } else if (filename.includes('frontend') || filename.includes('ui') || filename.includes('client')) {
+                domain = 'frontend';
+                reviewers.push('frontend-expert');
+              } else if (filename.includes('marketing') || filename.includes('campaign') || filename.includes('brand')) {
+                domain = 'marketing';
+                reviewers.push('marketing-expert');
+              } else if (filename.includes('automation') || filename.includes('ci') || filename.includes('deploy')) {
+                domain = 'automation';
+                reviewers.push('automation-manager');
+              }
+            }
+
+            // Add domain-specific labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [domain, 'deliverable']
+            });
+
+            // Request reviews from domain experts
+            const uniqueReviewers = [...new Set(reviewers)].filter(r => r !== pr.user.login);
+            if (uniqueReviewers.length > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                reviewers: uniqueReviewers
+              });
+
+              console.log(`Assigned reviewers: ${uniqueReviewers.join(', ')}`);
+              console.log(`Detected domain: ${domain}`);
+            }
+
+  dependency-chain-manager:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    steps:
+      - name: Manage agent dependency chain
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const labels = pr.labels.map(label => label.name);
+            
+            // Define dependency matrix for sequential workflows
+            const dependencyChain = {
+              'backend': {
+                next: ['frontend'],
+                message: 'Backend API is ready! Frontend can now implement UI components.',
+                unblocks: 'API endpoints and data models are available'
+              },
+              'frontend': {
+                next: ['marketing'],
+                message: 'Frontend UI is complete! Marketing can now create user-facing materials.',
+                unblocks: 'User interface and user experience ready for marketing'
+              },
+              'marketing': {
+                next: ['automation'],
+                message: 'Marketing materials ready! Automation can now set up deployment.',
+                unblocks: 'Documentation and promotional content available'
+              }
+            };
+
+            // Find which domain completed
+            const completedDomain = labels.find(label => 
+              Object.keys(dependencyChain).includes(label)
+            );
+
+            if (completedDomain && dependencyChain[completedDomain]) {
+              const config = dependencyChain[completedDomain];
+              
+              // Create notifications for next agents in chain
+              for (const nextDomain of config.next) {
+                const notificationTitle = `🚀 Ready for ${nextDomain}: ${completedDomain} deliverable completed`;
+                const notificationBody = `## Agent Coordination Notification
+
+**From Domain**: ${completedDomain}
+**To Domain**: ${nextDomain}
+**Status**: ✅ Dependency Satisfied
+
+### What's Ready
+${config.message}
+
+**Completed PR**: #${pr.number}
+**What this unblocks**: ${config.unblocks}
+
+### Next Steps for ${nextDomain}-expert:
+1. Review the completed deliverable: \`deliverables/${completedDomain}-*.md\`
+2. Ensure your implementation aligns with the completed work
+3. Create your deliverable referencing the dependencies as needed
+4. Submit PR when ready for review
+
+### Files to Reference:
+${pr.changed_files || 'Check PR for changed files'}
+
+---
+**Automated by Multi-Agent Coordination System**
+*This notification was triggered by the successful merge of PR #${pr.number}*`;
+
+                // Create coordination issue
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: notificationTitle,
+                  body: notificationBody,
+                  labels: ['coordination', 'dependency', nextDomain, 'high-priority'],
+                  assignees: [`${nextDomain}-expert`]
+                });
+
+                console.log(`Created coordination notification for ${nextDomain}-expert`);
+              }
+            }
+
+  parallel-workflow-coordinator:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Coordinate parallel agent workflows
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Get all open PRs to check for parallel work
+            const { data: openPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            const { data: allIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'agent-task'
+            });
+
+            // Check for potential conflicts
+            const currentPR = context.payload.pull_request;
+            if (currentPR && github.event.action === 'opened') {
+              const conflicts = [];
+              
+              // Check for file conflicts with other open PRs
+              const { data: currentFiles } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: currentPR.number
+              });
+
+              for (const otherPR of openPRs.filter(pr => pr.number !== currentPR.number)) {
+                const { data: otherFiles } = await github.rest.pulls.listFiles({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: otherPR.number
+                });
+
+                const conflictingFiles = currentFiles.filter(currentFile =>
+                  otherFiles.some(otherFile => otherFile.filename === currentFile.filename)
+                );
+
+                if (conflictingFiles.length > 0) {
+                  conflicts.push({
+                    pr: otherPR.number,
+                    files: conflictingFiles.map(f => f.filename)
+                  });
+                }
+              }
+
+              // Post coordination comment if conflicts detected
+              if (conflicts.length > 0) {
+                const conflictComment = `## ⚠️ Parallel Workflow Coordination Alert
+
+**Potential conflicts detected** with other active PRs:
+
+${conflicts.map(conflict => 
+                  `- **PR #${conflict.pr}**: Conflicting files: ${conflict.files.join(', ')}`
+                ).join('\n')}
+
+### Recommended Actions:
+1. Coordinate with the agents working on the conflicting PRs
+2. Consider sequential merging if files overlap significantly  
+3. Ensure proper integration testing before merge
+
+**Project Coordinator** has been notified for resolution.`;
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: currentPR.number,
+                  body: conflictComment
+                });
+              }
+            }
+
+  progress-tracker:
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Update comprehensive progress tracking
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Comprehensive progress analysis
+            const { data: allIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all'
+            });
+
+            const { data: allPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all'
+            });
+
+            // Categorize by agent/domain
+            const domains = ['backend', 'frontend', 'marketing', 'automation'];
+            const progress = {};
+
+            domains.forEach(domain => {
+              const domainIssues = allIssues.filter(issue => 
+                !issue.pull_request && 
+                issue.labels.some(label => label.name === domain)
+              );
+              
+              const domainPRs = allPRs.filter(pr =>
+                pr.labels.some(label => label.name === domain)
+              );
+
+              progress[domain] = {
+                issues: {
+                  total: domainIssues.length,
+                  closed: domainIssues.filter(i => i.state === 'closed').length
+                },
+                prs: {
+                  total: domainPRs.length,
+                  merged: domainPRs.filter(pr => pr.merged_at).length
+                }
+              };
+            });
+
+            // Calculate overall metrics
+            const totalTasks = Object.values(progress).reduce((sum, domain) => sum + domain.issues.total, 0);
+            const completedTasks = Object.values(progress).reduce((sum, domain) => sum + domain.issues.closed, 0);
+            const totalPRs = Object.values(progress).reduce((sum, domain) => sum + domain.prs.total, 0);
+            const mergedPRs = Object.values(progress).reduce((sum, domain) => sum + domain.prs.merged, 0);
+
+            const overallProgress = totalTasks > 0 ? Math.round(((completedTasks / totalTasks) * 100)) : 0;
+
+            // Generate progress report
+            const progressReport = `# 📊 Multi-Agent Project Dashboard
+
+## 🎯 Overall Progress: ${overallProgress}%
+
+### 📋 Domain Breakdown
+${domains.map(domain => {
+              const d = progress[domain];
+              const domainProgress = d.issues.total > 0 ? Math.round((d.issues.closed / d.issues.total) * 100) : 0;
+              return `**${domain.toUpperCase()}**: ${domainProgress}% (${d.issues.closed}/${d.issues.total} tasks, ${d.prs.merged}/${d.prs.total} PRs merged)`;
+            }).join('\n')}
+
+### 🚀 Active Coordination
+- **Sequential Dependencies**: Tracking completion chain
+- **Parallel Workflows**: Monitoring for conflicts
+- **Integration Status**: ${mergedPRs}/${totalPRs} deliverables integrated
+
+### 📈 Key Metrics
+- **Task Completion**: ${completedTasks}/${totalTasks}
+- **Deliverable Integration**: ${mergedPRs}/${totalPRs}
+- **Agent Coordination**: Active monitoring enabled
+
+---
+*Updated: ${new Date().toISOString()}*
+*Next update: On workflow events*`;
+
+            console.log('=== PROJECT PROGRESS DASHBOARD ===');
+            console.log(progressReport);
+            
+            // Store metrics for potential external consumption
+            const metrics = {
+              overall_progress: overallProgress,
+              completed_tasks: completedTasks,
+              total_tasks: totalTasks,
+              merged_prs: mergedPRs,
+              total_prs: totalPRs,
+              domain_breakdown: progress,
+              last_updated: new Date().toISOString()
+            };
+            
+            console.log('=== METRICS JSON ===');
+            console.log(JSON.stringify(metrics, null, 2));
