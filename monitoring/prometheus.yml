@@ -1,0 +1,90 @@
+# 📊 Prometheus Configuration for Multi-Agent System Monitoring
+# Comprehensive monitoring and alerting setup
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'multi-agent-system'
+
+# Rule files for alerting
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+
+  # Multi-Agent API monitoring
+  - job_name: 'multi-agent-api'
+    static_configs:
+      - targets: ['api:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    
+    # Health check integration
+    params:
+      format: ['prometheus']
+    
+    # Custom labels
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'multi-agent-api'
+      - target_label: service
+        replacement: 'backend-expert'
+
+  # Frontend nginx monitoring
+  - job_name: 'multi-agent-frontend'
+    static_configs:
+      - targets: ['frontend:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'multi-agent-frontend'
+      - target_label: service
+        replacement: 'frontend-expert'
+
+  # Health check monitoring for all services
+  - job_name: 'health-checks'
+    static_configs:
+      - targets: 
+          - 'api:3000'
+          - 'frontend:80'
+    metrics_path: '/health'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+    # Custom health check parameters
+    params:
+      format: ['json']
+    
+    relabel_configs:
+      - target_label: check_type
+        replacement: 'health'
+
+  # Docker container monitoring (if node_exporter is available)
+  - job_name: 'docker-containers'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    
+    relabel_configs:
+      - target_label: monitoring_type
+        replacement: 'infrastructure'
+
+# Alertmanager configuration (if available)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093

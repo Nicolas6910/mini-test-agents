@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - Multi-Agent System</title>
+    <meta name="description" content="Interface web pour la gestion des utilisateurs du système multi-agents">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">
+                    <span class="logo-icon">⚙️</span>
+                    Multi-Agent System
+                </h1>
+                <div class="health-status">
+                    <div id="health-indicator" class="health-indicator" aria-label="API Health Status">
+                        <div class="health-dot"></div>
+                        <span class="health-text">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Page Title -->
+            <div class="page-header">
+                <h2>Gestion des Utilisateurs</h2>
+                <p class="page-description">Interface pour gérer les utilisateurs du système</p>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <button id="add-user-btn" class="btn btn-primary" aria-label="Ajouter un nouvel utilisateur">
+                    <span class="btn-icon">+</span>
+                    Nouvel Utilisateur
+                </button>
+                <div class="filters">
+                    <select id="role-filter" class="select" aria-label="Filtrer par rôle">
+                        <option value="">Tous les rôles</option>
+                        <option value="user">Utilisateur</option>
+                        <option value="admin">Administrateur</option>
+                    </select>
+                    <button id="refresh-btn" class="btn btn-secondary" aria-label="Actualiser la liste">
+                        <span class="btn-icon">🔄</span>
+                        Actualiser
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="loading-state" aria-hidden="true">
+                <div class="spinner"></div>
+                <p>Chargement des utilisateurs...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error-state" class="error-state" aria-hidden="true">
+                <div class="error-icon">⚠️</div>
+                <h3>Erreur de chargement</h3>
+                <p id="error-message">Une erreur est survenue lors du chargement des données.</p>
+                <button id="retry-btn" class="btn btn-primary">Réessayer</button>
+            </div>
+
+            <!-- Users Table -->
+            <div id="users-container" class="users-container">
+                <div class="table-header">
+                    <h3>Liste des Utilisateurs</h3>
+                    <div id="users-count" class="users-count">0 utilisateur(s)</div>
+                </div>
+                
+                <div class="table-wrapper">
+                    <table class="users-table" id="users-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">ID</th>
+                                <th scope="col">Nom</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Rôle</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody">
+                            <!-- Users will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state" aria-hidden="true">
+                    <div class="empty-icon">👥</div>
+                    <h3>Aucun utilisateur trouvé</h3>
+                    <p>Commencez par ajouter votre premier utilisateur.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for Add/Edit User -->
+    <div id="user-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="modal-title">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Nouvel Utilisateur</h2>
+                <button id="close-modal-btn" class="modal-close" aria-label="Fermer la modale">&times;</button>
+            </div>
+            
+            <form id="user-form" class="modal-body">
+                <div class="form-group">
+                    <label for="user-name" class="form-label">Nom complet *</label>
+                    <input 
+                        type="text" 
+                        id="user-name" 
+                        name="name" 
+                        class="form-input" 
+                        required 
+                        minlength="2" 
+                        maxlength="50"
+                        aria-describedby="name-help"
+                    >
+                    <div id="name-help" class="form-help">Entre 2 et 50 caractères</div>
+                    <div id="name-error" class="form-error" aria-live="polite"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="user-email" class="form-label">Email *</label>
+                    <input 
+                        type="email" 
+                        id="user-email" 
+                        name="email" 
+                        class="form-input" 
+                        required
+                        aria-describedby="email-help"
+                    >
+                    <div id="email-help" class="form-help">Adresse email valide et unique</div>
+                    <div id="email-error" class="form-error" aria-live="polite"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="user-role" class="form-label">Rôle</label>
+                    <select id="user-role" name="role" class="form-select">
+                        <option value="user">Utilisateur</option>
+                        <option value="admin">Administrateur</option>
+                    </select>
+                    <div class="form-help">Niveau d'accès de l'utilisateur</div>
+                </div>
+            </form>
+
+            <div class="modal-footer">
+                <button type="button" id="cancel-btn" class="btn btn-secondary">Annuler</button>
+                <button type="submit" id="save-btn" class="btn btn-primary" form="user-form">
+                    <span class="btn-loading" aria-hidden="true">
+                        <div class="spinner-small"></div>
+                    </span>
+                    <span class="btn-text">Sauvegarder</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="confirm-title">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2 id="confirm-title">Confirmer la suppression</h2>
+            </div>
+            
+            <div class="modal-body">
+                <p id="confirm-message">Êtes-vous sûr de vouloir supprimer cet utilisateur ?</p>
+                <div class="confirm-details">
+                    <strong id="confirm-user-name"></strong><br>
+                    <span id="confirm-user-email"></span>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" id="confirm-cancel-btn" class="btn btn-secondary">Annuler</button>
+                <button type="button" id="confirm-delete-btn" class="btn btn-danger">
+                    <span class="btn-loading" aria-hidden="true">
+                        <div class="spinner-small"></div>
+                    </span>
+                    <span class="btn-text">Supprimer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <script src="api-client.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
